@@ -1,0 +1,8 @@
+Button 1: C:\Program Files
+Button 2: www.gmail.com
+Button 3: www.youtube.com
+Button 4: not_set_yet
+Button 5: not_set_yet
+Button 6: not_set_yet
+Button 7: not_set_yet
+Button 8: not_set_yet
