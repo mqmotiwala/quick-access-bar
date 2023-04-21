@@ -18,6 +18,7 @@ return
 
 #w::
 GoSub, ShowQuickAccessGUI
+NestedQAB("Test123")
 return
 
 ; ----------------------------------------------------------------------------------------------------------
@@ -78,17 +79,16 @@ ShowQuickAccessGUI:
 
 	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressTimeSheet, Timesheet
 	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressSharePoint, SharePoint
-	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressDashboard, ROAM Dashboard
-	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressSafetyObservation, Safety Observation 
+	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressVPN, Hatch VPN
 
 	; add Special Buttons
 	Gui, Font, cWhite s%QABFontSize% w%BoldWeight%
 	Gui, Add, Text, x%HorizontalMargin%, Special Buttons
 	Gui, Font
-	
-	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressUnitConverter, Unit Converter
-	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressSnippingTool, Snipping Tool
+
 	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressCopiedLink, %CopiedAddressSpecialButtonName%
+	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressSnippingTool, Snipping Tool
+	Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% gPressUnitConverter, Unit Converter
 	
 	; add Dynamic Buttons
 	if(NamesArray.Length() != 0)
@@ -199,19 +199,8 @@ PressSharePoint:
 	GoSub, CloseQAB
 return
 
-PressDashboard:
-	run, https://app.powerbi.com/groups/me/reports/1e3a5f1d-a1d0-4844-a959-d4f9ca39ad05/ReportSection863ec14e12657866880b?ctid=82a1cdba-ae8d-4b25-adb6-9a4173a8be58,, UseErrorLevel
-	If (ErrorLevel == "ERROR")
-		{
-			GoSub, GenericErrorLevel
-			return
-		}
-		
-	GoSub, CloseQAB
-return
-
-PressSafetyObservation:
-	run, https://ipassm/NetForms/new/ROAM-Online,, UseErrorLevel
+PressVPN:
+	run, C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Palo Alto Networks\GlobalProtect\GlobalProtect.lnk,, UseErrorLevel
 	If (ErrorLevel == "ERROR")
 		{
 			GoSub, GenericErrorLevel
@@ -223,7 +212,7 @@ return
 
 GenericErrorLevel:
 	MsgBox, 4116, ERROR, Uh oh, there was an unusual error.`n`nWould you like to send me an email? I'll sort this out for ya!
-	ContactLink := "mailto:mqmotiwala@gmail.com?subject=Quick%20Access%20Bar - General Error"
+	ContactLink := "mailto:mufaddal.motiwala@hatch.com?subject=Quick%20Access%20Bar - General Error"
 	IfMsgBox, Yes
 		run, %ContactLink%
 return
@@ -239,7 +228,7 @@ PressCopiedLink:
 		
 		; if clipboard exists and is not a direct link, Google search clipboard contents
 		if (StrippedClipboard)
-			run, https://www.google.com/search?q=%clipboard%,, UseErrorLevel
+			run, https://www.google.com/#q=%clipboard%,, UseErrorLevel
 		else
 			{
 				MsgBox, 4112, ERROR, You don't have anything copied!
@@ -280,6 +269,129 @@ PressDynamicButton:
 	}
 	GoSub, CloseQAB
 return
+
+; ----------------------------------------------------------------------------------------------------------
+; --------------------------------------------- NESTED QABs  -----------------------------------------------
+; ----------------------------------------------------------------------------------------------------------
+
+NestedQAB(NestName)
+	{
+		global
+		
+		; create arrays
+		NamesArray := []
+		LinksArray := []   
+
+		; parse .ini file contents to populate arrays
+		ButtonsSectionName := NestName . "-NestedButtons"
+		LinksSectionName := NestName . "-NestedLinks"
+
+		IniRead, ParsedNestedButtonNames, %LocalIniFilePath%, %ButtonsSectionName%
+		IniRead, ParsedNestedLinkAddresses, %LocalIniFilePath%, %LinksSectionName%
+		
+		Loop, Parse, ParsedNestedButtonNames, `n, `r%A_Space%%A_Tab%
+			NamesArray.Push(A_LoopField)
+
+		Loop, Parse, ParsedNestedLinkAddresses, `n, `r%A_Space%%A_Tab%	
+			LinksArray.Push(A_LoopField)
+			
+		; create Quick Access Bar 
+		Gui, %NestName%_QAB:New
+
+		GeneralButtonWidth 		= 150
+		HorizontalMargin 		= 10
+		VerticalMargin 			= 10
+		QABFontSize				= 8
+		BoldWeight				= 600
+
+		QABWidth := GeneralButtonWidth + 2*HorizontalMargin
+
+		; add Edit Links button
+		; defaults to 'Add' but will update to 'Edit' if dynamic buttons exist
+		EditLinksButtonName := "Add Dynamic Buttons"
+		Gui, Add, Button, x%HorizontalMargin% y%VerticalMargin% w%GeneralButtonWidth% gNestedEditLinks vNestedEditLinksButton, %EditLinksButtonName%
+
+		; show NestName
+		Gui, Font, cWhite s%QABFontSize% w%BoldWeight%
+		Gui, Add, Text, x%HorizontalMargin%, %NestName% Nested Buttons
+		Gui, Font 
+		
+		; add Dynamic Buttons
+		if(NamesArray.Length() != 0)
+		{
+			; Gui, Font, cWhite s%QABFontSize% w%BoldWeight%
+			; Gui, Add, Text, x%HorizontalMargin%, Dynamic Buttons
+			; Gui, Font
+			
+			EditLinksButtonName := "Edit Dynamic Buttons"
+			GuiControl,, EditLinksButton, %EditLinksButtonName%
+		}
+
+		Loop, 25
+			Gui, Add, Button, x%HorizontalMargin% w%GeneralButtonWidth% v%A_Index% gPressDynamicButton Hidden, % NamesArray[A_Index]
+
+		Loop, % NamesArray.Length()
+			GuiControl, Show, % A_Index
+
+		; show Quick Access Bar
+		; identify monitor screen 
+		ActiveMonitor 	:= GetCurrentMonitorIndex()
+		QABX 			:= CoordXCenterScreen(QABWidth, ActiveMonitor)
+		
+		; set GUI preferences; E0x40000 forces taskbar to show icon
+		Gui +AlwaysOnTop +ToolWindow +E0x840000
+		Gui, Color, E54D31
+		Gui, Show, x%QABX% yCenter Autosize, %NestName% - Nested QAB
+	}
+
+NestedEditLinks()
+	{
+		; declare Edit Links GUI preferences
+		Offsets				= 5
+		TextsGap			= 8
+		TextsHeight			= 22
+		MaxButtons 			= 25
+		NamesEditWidth 		= 150
+		LinksEditWidth 		= 600
+		SaveButtonWidth 	= 50
+		SaveButtonHeight 	= 25
+		EditorFontSize		= 9
+		
+		EditerGuiWidth := NamesEditWidth + LinksEditWidth + 2*Offsets + 4
+		
+		NamesEditX	:= Offsets + 1
+		LinksEditX	:= Offsets + NamesEditWidth + 3
+		TextsY		:= Offsets + SaveButtonHeight + TextsGap
+		EditsY 		:= Offsets + SaveButtonHeight + TextsHeight
+		
+		; create Edit Links GUI
+		Gui, NestedEditer:New,, Add Dynamic Buttons
+		Gui +AlwaysOnTop +ToolWindow -SysMenu
+		Gui, Font, s%EditorFontSize%
+		Gui, Color, eaeaea
+		
+		; set border margins
+		Gui, Margin, %Offsets%, %Offsets%
+		
+		; add Save button
+		Gui, Add, Button, x%Offsets% y%Offsets% w%SaveButtonWidth% h%SaveButtonHeight% gPressSave, Save
+		
+		; add description texts edit fields with desired preferences 
+		Gui, Add, Text, x%NamesEditX% y%TextsY%, Insert Button Names Below
+		Gui, Add, Text, x%LinksEditX% y%TextsY%, Insert Corresponding Links Below
+		
+		Gui, Add, Edit, vNamesEdit x%NamesEditX% y%EditsY% WantReturn -VScroll -Wrap 0x2 w%NamesEditWidth% r%MaxButtons%
+		Gui, Add, Edit, vLinksEdit x%LinksEditX% y%EditsY% WantReturn -VScroll -Wrap w%LinksEditWidth% r%MaxButtons%	
+
+		; insert .ini file parsed contents into the edit fields
+		GuiControl,, NamesEdit, %ParsedNestedButtonNames%
+		GuiControl,, LinksEdit, %ParsedNestedLinkAddresses%
+		
+		; show Edit Links GUI
+		;EditerGuiX := QABX - (EditerGuiWidth + 2*HorizontalMargin)	
+		EditerGuiX = 500
+		Gui, Show, x%EditerGuiX% yCenter AutoSize, %EditLinksButtonName%
+	}
 
 ; ----------------------------------------------------------------------------------------------------------
 ; ------------------------------------------ ABOUT BUTTON GUI  ---------------------------------------------
@@ -338,7 +450,7 @@ PressAbout:
 	LinkBoxY := A1Sentence3DimensionsY
 
 	Gui, Font, Underline
-	Gui, Add, Link, x%LinkBoxX% y%LinkBoxY% BackgroundTrans vLinkBox, <a href="mailto:mqmotiwala@gmail.com?subject=Quick Access Bar - Feedback">contact Mufaddal Motiwala</a>
+	Gui, Add, Link, x%LinkBoxX% y%LinkBoxY% BackgroundTrans vLinkBox, <a href="mailto:mufaddal.motiwala@hatch.com?subject=Quick Access Bar - Feedback">contact Mufaddal Motiwala</a>
 	Gui, Font, s%FontSize%, %FontName%
 	Gui, Font, Norm
 
@@ -719,8 +831,8 @@ UpdateUsageStatsOnNetwork:
 return
 
 CheckForUpdates:
-	; check for updates on weekdays between 10AM to 6PM only
-	if (A_Hour >= 10 && A_Hour < 18 && A_WDay >= 2 && A_WDay <= 6)
+	; check for updates on weekdays between 10AM to 3PM only
+	if (A_Hour >= 10 && A_Hour <= 15 && A_WDay >= 2 && A_WDay <= 6)
 		{
 			; acquire latest version number and patch notes
 			IniRead, LatestVersion, %UpdateInfoNetworkFilePath%, Update, LatestVersion, 0
@@ -812,21 +924,13 @@ PressUnitConverter:
 	; set GUI parameters and physical constants
 	GuiW := 276
 	Margin := 2
-	RangeMin := -2147483648
-	RangeMax := 2147483647
 	UnitConverterTitle := "Quick Access Bar - Unit Converter"
 	
 	TopY := Margin - 0
 	TopH := 150
 	BottomY := TopY + TopH
 	BottomH := 70
-	GroupBoxX := Margin + 1
-	
-	DisclaimerY := BottomY + BottomH
-	DisclaimerH := 55
-	DisclaimerTextX := GroupBoxX + 10
-	DisclaimerTextY := DisclaimerY + 20
-	DisclaimerText := "Accuracy in conversions is not guaranteed.`nRemember to always double check critical values."
+	GroupBoxX := Margin + 1	
 	
 	BottomSpacing := 30
 	RadioH := 20
@@ -868,7 +972,6 @@ PressUnitConverter:
 	CopyButtonX := ToX
 	SwapButtonX := FromX + DropDownW - ButtonW
 	
-	; currency 
 	CurrencyButtonX := (GuiW - ButtonW)/2
 	CurrencyButtonY := BottomY + 20
 	CurrencyTextX := GroupBoxX + Margin
@@ -879,29 +982,21 @@ PressUnitConverter:
 	ToTextY := FromY + DropDownH/4
 	EqualsTextY := ToY + DropDownH + DropDownH/4
 		
-	; volume standard dropdown
-	VolTextX := FromX
-	VolTextY := Radio1Y
-	
-	VolDropDownX := VolTextX
-	VolDropDownY := VolTextY + 15 
-	VolDropDownW := DropDownW
-	VolDropDownH := DropDownH
-	
+	RangeMin := -2147483648
+	RangeMax := 2147483647
+		
 	; set GUI layout
 	Gui, UnitConverter:New
 	Gui, Margin, %Margin%, %Margin%
 	Gui, Add, GroupBox, x%GroupBoxX% y%TopY% w%GuiW% h%TopH% cBlack vInputsGroupBox, Inputs
 	Gui, Add, GroupBox, x%GroupBoxX% y%BottomY% w%GuiW% h%BottomH% cBlack vSettingsGroupBox, Settings
-	Gui, Add, GroupBox, x%GroupBoxX% y%DisclaimerY% w%GuiW% h%DisclaimerH% cBlack vDisclaimerGroupBox, Disclaimer
 	Gui, Add, Radio, x%RadioX% y%Radio1Y% h%RadioH% vRB1 gSetPrecisionToReg Checked, Regular
 	Gui, Add, Radio, x%RadioX% y%Radio2Y% h%RadioH% vRB2 gSetPrecisionToSci, Scientific
 	Gui, Add, Edit, x%DecimalsEditX% y%DecimalsEditY% w%DecimalsEditW% h%DecimalsEditH% gSetPrecision vSetPrecision,
 	Gui, Add, UpDown, vSetPrecisionUpDown Range0-12 Wrap, 2
+	Gui, Add, Text, x%DecimalsEditX% y%DecimalsTextY% vSetPrecisionText, Decimals
 	Gui, Add, Button, x%CopyButtonX% y%ButtonY% w%ButtonW% h%ButtonH% vCopyResultButton gCopyResult, Copy Result
 	Gui, Add, Button, x%SwapButtonX% y%ButtonY% w%ButtonW% h%ButtonH% vSwapButton gSwap, Swap Units
-	Gui, Add, Text, x%DecimalsEditX% y%DecimalsTextY% vSetPrecisionText, Decimals
-	Gui, Add, Text, x%DisclaimerTextX% y%DisclaimerTextY%, %DisclaimerText%
 	
 	; add dropdown lists
 	Gui, Add, DropDownList, x%UnitGroupDropDownX% y%UnitGroupDropDownY% w%UnitGroupDropDownW% h%DropDownH% Sort r30 gSelectedUnitGroup vSelectedUnitGroup
@@ -922,10 +1017,6 @@ PressUnitConverter:
 	; currency controls
 	Gui, Add, Button, x%CurrencyButtonX% y%CurrencyButtonY% w%ButtonW% h%ButtonH% vCurrencyButton gCurrencyCalc Hidden, Convert
 	Gui, Add, Text, x%CurrencyTextX% y%CurrencyTextY% w%CurrencyTextW% +Center vCurrencyText Hidden 
-	
-	; volume reference temperature controls
-	Gui, Add, Text, x%VolTextX% y%VolTextY% vVolText Hidden, Reference Temperature
-	Gui, Add, DropDownList, x%VolDropDownX% y%VolDropDownY% w%VolDropDownW% h%VolDropDownH% r30 vVolDropDown gCalc Hidden
 	
 	; format From and To dropdowns based on Selected Unit
 	GoSub, SelectedUnitGroup
@@ -999,10 +1090,10 @@ SelectedUnitGroup:
 	Gui, Submit, NoHide
 	
 	if (SelectedUnitGroup == "All")
-		GuiControl,, SelectedUnit, |Angle|Area|Distance||Mass|Speed|Temperature|Time|Fuel Consumption|Acceleration|Density|Energy|Force|Power|Pressure|Volume|Moment of Inertia|Coeff. of Thermal Expansion|Specific Heat Capacity|Heat Transfer Coefficient|Thermal Conductivity|Volumetric Flow Rate|Mass Flow Rate|Concentration
+		GuiControl,, SelectedUnit, |Angle|Area|Currency|Distance||Mass|Speed|Temperature|Time|Fuel Consumption|Acceleration|Density|Energy|Force|Power|Pressure|Volume|Moment of Inertia|Coeff. of Thermal Expansion|Specific Heat Capacity|Heat Transfer Coefficient|Thermal Conductivity|Volumetric Flow Rate|Mass Flow Rate|Concentration
 	
 	if (SelectedUnitGroup == "General")
-		GuiControl,, SelectedUnit, |Angle|Area|Distance||Mass|Speed|Temperature|Time|Fuel Consumption
+		GuiControl,, SelectedUnit, |Angle|Area|Currency|Distance||Mass|Speed|Temperature|Time|Fuel Consumption
 	
 	if (SelectedUnitGroup == "Engineering")
 		GuiControl,, SelectedUnit, |Acceleration|Density|Energy|Force|Power||Pressure|Volume|Moment of Inertia
@@ -1020,24 +1111,17 @@ return
 SelectedUnit:
 	Gui, Submit, NoHide
 
-	; currency is currently removed from the "All" and "General" dropdown lists so this section should never run
 	if (SelectedUnit == "Currency")
 		{
 			Guicontrol,, from, 	|USD|EUR|JPY|GBP|AUD|CAD||CHF|HKD|NZD|KRW|SGD|MXN|INR|TRY|AED|COP|SAR
 			Guicontrol,, to, 	|USD||EUR|JPY|GBP|AUD|CAD|CHF|HKD|NZD|KRW|SGD|MXN|INR|TRY|AED|COP|SAR
 			
-			; hide volume reference controls
-			GuiControl, Hide, VolDropDown
-			GuiControl, Hide, VolText
-			
-			; hide radio buttons and precision controls
 			GuiControl, Hide, RB1
 			GuiControl, Hide, RB2
 			GuiControl, Hide, SetPrecision
 			GuiControl, Hide, SetPrecisionUpDown
 			GuiControl, Hide, SetPrecisionText
 			
-			; show currency controls 
 			GuiControl, Show, CurrencyButton
 			GuiControl, Show, CurrencyText
 			
@@ -1045,77 +1129,18 @@ SelectedUnit:
 			GuiControl, Text, SettingsGroupBox, Currency Controls
 			return
 		}
-	else if (SelectedUnit == "Volume")
-		{
-			Guicontrol,, volDropDown, |15 °C (Standard)||0 °C (Normal)|60 °F|67 °F|
-			
-			; show volume reference controls
-			GuiControl, Show, VolDropDown
-			GuiControl, Show, VolText
-									
-			; hide currency controls 
-			GuiControl, Hide, CurrencyButton
-			GuiControl, Hide, CurrencyText		
-			
-			; hiding before move avoids strange visuals on GUI controls
-			; hide radio buttons and precision controls
-			GuiControl, Hide, RB1
-			GuiControl, Hide, RB2
-			GuiControl, Hide, SetPrecision
-			GuiControl, Hide, SetPrecisionUpDown
-			GuiControl, Hide, SetPrecisionText
-			
-			; move radio buttons and precision controls
-			Move := 75
-			GuiControlGet, PrecisionUpDown, Pos, SetPrecisionUpDown
-			GuiControl, Move, RB1, % "x" RadioX + Move
-			GuiControl, Move, RB2, % "x" RadioX + Move
-			GuiControl, Move, SetPrecision, % "x" DecimalsEditX + Move
-			GuiControl, Move, SetPrecisionUpDown, % "x" PrecisionUpDownX + Move
-			GuiControl, Move, SetPrecisionText, % "x" DecimalsEditX + Move
-			
-			; show radio buttons and precision controls
-			GuiControl, Show, RB1
-			GuiControl, Show, RB2
-			GuiControl, Show, SetPrecision
-			GuiControl, Show, SetPrecisionUpDown
-			GuiControl, Show, SetPrecisionText
-			
-			GuiControl, Text, SettingsGroupBox, Settings
-		}
 	else
 		{
-			; hide radio buttons and precision controls
-			GuiControl, Hide, RB1
-			GuiControl, Hide, RB2
-			GuiControl, Hide, SetPrecision
-			GuiControl, Hide, SetPrecisionUpDown
-			GuiControl, Hide, SetPrecisionText
-			
-			; move radio buttons and precision controls
-			Move := 0
-			GuiControl, Move, RB1, % "x" RadioX + Move
-			GuiControl, Move, RB2, % "x" RadioX + Move
-			GuiControl, Move, SetPrecision, % "x" DecimalsEditX + Move
-			GuiControl, Move, SetPrecisionUpDown, % "x" DecimalsEditX + Move + 20
-			GuiControl, Move, SetPrecisionText, % "x" DecimalsEditX + Move
-			
-			; show radio buttons and precision controls
 			GuiControl, Show, RB1
 			GuiControl, Show, RB2
 			GuiControl, Show, SetPrecision
 			GuiControl, Show, SetPrecisionUpDown
 			GuiControl, Show, SetPrecisionText
 			
-			GuiControl, Text, SettingsGroupBox, Settings
-			
-			; hide currency controls 
 			GuiControl, Hide, CurrencyButton
 			GuiControl, Hide, CurrencyText
 			
-			; hide volume reference controls
-			GuiControl, Hide, VolDropDown
-			GuiControl, Hide, VolText
+			GuiControl, Text, SettingsGroupBox, Settings
 		}
 
 	if (SelectedUnit == "Mass")
@@ -1273,11 +1298,10 @@ CurrencyCalc:
 	try	
 		{
 			pwb := ComObjCreate("InternetExplorer.Application")
-			pwb.visible := True
+			pwb.visible := False
 			pwb.Navigate(WebLink)
 	
 			LastUpdated := "Response time depends on your network speed."
-			LastUpdated := "This feature is currently under development. Sorry!"
 			GuiControl,, CurrencyText, %LastUpdated%
 			while pwb.busy or pwb.ReadyState != 4
 				Sleep, 500
@@ -1415,23 +1439,7 @@ Calc:
 
 			val := (From/To)*InputValue
 	   }
-		
-	if (SelectedUnit == "Volume")
-		{
-			; based on ideal gas law: v1/v2 = t1/t2
-			; t1 = 15 °C = 288.15K 
-			; t2 is the various other reference temperatures
-		
-			if (VolDropDown == "15 °C (Standard)")
-				val := val*1
-			if (VolDropDown == "0 °C (Normal)")
-				val := val*1.054914881933
-			if (VolDropDown == "60 °F")
-				val := val*0.998075701887737
-			if (VolDropDown == "67 °F")
-				val := val*0.984810222720109
-		}
-	
+	   
 	if ShowAsScientific
 	   SetFormat, Float, %RegP%E
 	else
@@ -1654,7 +1662,7 @@ ShowInstallError:
 	LinkBoxY := Sentence2DimensionsY
 
 	Gui, Font, Underline
-	Gui, Add, Link, x%LinkBoxX% y%LinkBoxY% BackgroundTrans vLinkBox, <a href="mailto:mqmotiwala@gmail.com?subject=Quick Access Bar - Install Error">Send me an email</a>
+	Gui, Add, Link, x%LinkBoxX% y%LinkBoxY% BackgroundTrans vLinkBox, <a href="mailto:mufaddal.motiwala@hatch.com?subject=Quick Access Bar - Install Error">Send me an email</a>
 	Gui, Font, s%FontSize%, %FontName%
 	Gui, Font, Norm
 
