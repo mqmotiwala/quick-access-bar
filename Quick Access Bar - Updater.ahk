@@ -1,5 +1,5 @@
 ﻿#NoEnv, UseUnsetLocal
-#Warn
+#Warn, All, Off
 #SingleInstance force
 #Persistent
 SendMode Event
@@ -7,12 +7,15 @@ SetWorkingDir %A_ScriptDir%
 SetBatchLines, -1
 AutoTrim, On
 OnExit("ExitFunction")
+Menu, Tray, Add, Exit, TrayMenuExit
+Menu, Tray, NoStandard
 
 ; ExitApp Codes
 ; 1 - After Successfully Updating
 ; 2 - No Update Required
 ; 3 - Generic Error Level
 ; 4 - Button OK pressed
+; 5 - Tray Menu Exit
 
 PerformUpdate()
 return
@@ -62,14 +65,15 @@ PerformUpdate()
 				
 				; update usage stats on network
 				AcquireLocalUsageStats()
-				IniWrite, %InstallationDate%, %UserStatsNetworkFilePath%, %A_Username%, InstallationDate
-				IniWrite, %Activations%, %UserStatsNetworkFilePath%, %A_Username%, Activations
-				IniWrite, %DailyAverage%, %UserStatsNetworkFilePath%, %A_Username%, DailyAverage
-				IniWrite, %TimeSaved%, %UserStatsNetworkFilePath%, %A_Username%, TimeSaved
 				IniWrite, %LatestVersion%, %UserStatsNetworkFilePath%, %A_Username%, Version
+				IniWrite, %InstallationDate%, %UserStatsNetworkFilePath%, %A_Username%, InstallationDate
 				
 				FormatTime, LastUpdated,,ddMMMyyyy hh:mmtt
 				IniWrite, %LastUpdated%, %UserStatsNetworkFilePath%, %A_Username%, LastUpdated
+				
+				IniWrite, %TimeSaved%, %UserStatsNetworkFilePath%, %A_Username%, TimeSaved
+				IniWrite, %Activations%, %UserStatsNetworkFilePath%, %A_Username%, Activations
+				IniWrite, %DailyAverage%, %UserStatsNetworkFilePath%, %A_Username%, DailyAverage
 				
 				; notify user of update as part of ExitFunction()
 				; sets ExitCode to 1 - this is used to identify ExitApp was called after an update happened
@@ -77,7 +81,7 @@ PerformUpdate()
 			}
 		else
 			{
-				MsgBox, 4160, Quick Access Bar - Updater, No update required.`n`nYou are using Version %CurrentVersion%, the latest and greatest Quick Access Bar currently has to offer!
+				MsgBox, 4160, Quick Access Bar - Updater, You are using Version %CurrentVersion%`nA new update is not currently available.
 				IfMsgBox, OK
 					ExitApp, 2
 			}
@@ -123,10 +127,15 @@ AcquireLocalUsageStats()
 	}
 return
 
+TrayMenuExit:
+	ExitApp, 5
+return
+
 GenericErrorLevel:
 	FormatTime, LastUpdated,,ddMMMyyyy hh:mmtt
-	IniWrite, %LastUpdated%, %UserStatsNetworkFilePath%, %A_Username%, LastUpdated	
-	IniWrite, TRUE, %UserStatsNetworkFilePath%, %A_Username%, ErrorWhileUpdating	
+	IniWrite, %LastUpdated%, %UserStatsNetworkFilePath%, %A_Username%, LastUpdated
+	ErrorCode := "ObscenelyLargeStringThatsMeantToCatchDeveloperAttention"
+	IniWrite, %ErrorCode%, %UserStatsNetworkFilePath%, %A_Username%, ErrorWhileUpdating	
 	
 	MsgBox, 4116, ERROR, There was an error while updating.`nNo action is required of you, continue enjoying Quick Access Bar.`n`nThe developer will be in touch with you soon to troubleshoot.`n`nIf you prefer, press Yes to send him an email now.
 	ContactLink := "mailto:mufaddal.motiwala@hatch.com?subject=Quick%20Access%20Bar%20-%20Error%20While%20Updating"
@@ -273,7 +282,8 @@ NotifyUserOfUpdate:
 	ActiveMonitor 	:= GetCurrentMonitorIndex()
 	UpdateInfoX		:= CoordXCenterScreen(GuiWidth, ActiveMonitor)
 	
-	Gui, +AlwaysOnTop +ToolWindow -SysMenu 
+	; set GUI preferences; E0x40000 forces taskbar to show icon
+	Gui, +AlwaysOnTop +ToolWindow -SysMenu +E0x840000
 	Gui, UpdateInfo:Show, x%UpdateInfoX% yCenter w%GuiWidth% h%GuiHeight%, Quick Access Bar - Update
 Return
 
